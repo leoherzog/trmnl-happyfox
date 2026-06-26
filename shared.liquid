@@ -1,0 +1,145 @@
+{% comment %}
+HappyFox — renders a glanceable help-desk dashboard from the serverless aggregator
+(serverless.js). That `run(input)` returns an ordered `cards` array of
+{ key, label, value } for the user-selected metrics, plus `updated` (ISO-8601 UTC) and
+`error`. Because it's a single data source, those keys arrive as top-level merge
+variables, so the four size files pass `cards`, `updated`, and `error` straight through.
+
+All rendering lives here; the four size files are thin wrappers that
+{% raw %}{% render 'main', ... %}{% endraw %} with a `layout_size` argument so every size shares one
+source of truth. The first selected card (`cards[0]`) is the hero (big number); the rest
+fill a stat-card grid, with each size capping how many it shows.
+{% endcomment %}
+
+{% comment %} ---- one stat card: a metric value over its label ---- {% endcomment %}
+{% template card %}
+<div class="item">
+  <div class="meta"></div>
+  <div class="content">
+    <span class="value {{ value_size | default: 'value--small' }} value--tnums"{% if card.value != nil %} data-value-format="true"{% endif %}>{{ card.value | default: '—' }}</span>
+    <span class="label {{ label_size | default: 'label--small' }}" data-clamp="2">{{ card.label }}</span>
+  </div>
+</div>
+{% endtemplate %}
+
+{% comment %} ---- title bar: inline headset icon, instance name, last-updated time ---- {% endcomment %}
+{% template title_bar %}
+<div class="title_bar">
+  <svg class="image" viewBox="0 0 18.979 18.835" xmlns="http://www.w3.org/2000/svg">
+    <g transform="translate(0 -.56641)" clip-path="url(#hf_clip0)">
+      <g clip-path="url(#hf_clip1)" fill="#ff5a00">
+        <path d="m2.5832 8.0872c0.40387 0 0.80012-0.1143 1.143-0.33275l4.1276-2.6188-5.7964-4.2241c-0.856-0.62486-2.0574-0.0127-2.0574 1.044v4.435l1.077 1.0719c0.40387 0.40133 0.93728 0.62232 1.5088 0.62232z"/>
+        <path d="m0.45213 12.27 5.931 5.0928 2.0117 1.7273c0.46991 0.4038 1.1583 0.4165 1.6434 0.033l8.4483-6.6626c0.3099-0.2464 0.4927-0.6198 0.4927-1.016v-9.5811c0-1.0389-1.1658-1.6561-2.0244-1.0694l-7.7776 5.3087-4.6356 2.9414c-0.60199 0.38355-1.2827 0.56897-1.9584 0.56897-0.94236 0-1.8771-0.36323-2.5832-1.0668v2.7432c0 0.3785 0.1651 0.7367 0.45213 0.9805z"/>
+      </g>
+    </g>
+    <defs>
+      <clipPath id="hf_clip0"><rect width="105.15" height="20" fill="#fff"/></clipPath>
+      <clipPath id="hf_clip1"><rect transform="translate(0 .56641)" width="18.979" height="18.835" fill="#fff"/></clipPath>
+    </defs>
+  </svg>
+  {% if layout_size == 'full' or layout_size == 'half-horizontal' %}
+  <span class="title">{{ trmnl.plugin_settings.instance_name | default: 'HappyFox' }}</span>
+  {% endif %}
+  {% if updated_display %}
+  <span class="instance">Updated {{ updated_display }}</span>
+  {% endif %}
+</div>
+{% endtemplate %}
+
+{% template main %}
+{% comment %} time mask: respect the 12/24-hour custom field {% endcomment %}
+{% if trmnl.plugin_settings.custom_fields_values.timemode == '24_hour' %}
+{% assign mask_time = '%H:%M' %}
+{% else %}
+{% assign mask_time = '%-I:%M%P' %}
+{% endif %}
+
+{% comment %} aggregator stamps `updated` as ISO-8601 UTC; shift to the user's local time {% endcomment %}
+{% assign updated_display = nil %}
+{% if updated %}
+{% assign updated_local = updated | date: '%s' | plus: trmnl.user.utc_offset | date: '%Y-%m-%dT%H:%M:%S%z' %}
+{% assign updated_display = updated_local | l_date: mask_time, trmnl.user.locale %}
+{% endif %}
+
+{% if error != blank or cards == blank %}
+{%- comment -%} Empty / error state {%- endcomment -%}
+<div class="layout layout--center">
+  <span class="label lg:label--large text--center" data-clamp="3">{{ error | default: 'No HappyFox Data' }}</span>
+</div>
+
+{% else %}
+{% assign hero = cards[0] %}
+
+{% case layout_size %}
+
+{% comment %} ================= FULL (800x480) ================= {% endcomment %}
+{% when 'full' %}
+<div class="layout layout--col gap--space-between">
+  <div class="grid">
+    {% render 'card', card: hero, value_size: 'value--xxxlarge lg:value--giga', label_size: 'label--large' %}
+  </div>
+  {% if cards.size > 1 %}
+  <div class="divider"></div>
+  <div class="grid grid--cols-4 gap--medium">
+    {% for card in cards offset: 1 limit: 7 %}
+    {% render 'card', card: card, value_size: 'value--medium lg:value--large', label_size: 'label--small lg:label--base' %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% comment %} ============ HALF-HORIZONTAL (800x240) ============ {% endcomment %}
+{% when 'half-horizontal' %}
+<div class="layout layout--col">
+  <div class="flex flex--row gap--large flex--center-y grow">
+    <div class="flex flex--col flex--center-y no-shrink">
+      {% render 'card', card: hero, value_size: 'value--xxlarge lg:value--xxxlarge', label_size: 'label--base lg:label--large' %}
+    </div>
+    {% if cards.size > 1 %}
+    <div class="grid grid--cols-3 gap--small grow">
+      {% for card in cards offset: 1 limit: 3 %}
+      {% render 'card', card: card, value_size: 'value--medium lg:value--large', label_size: 'label--small lg:label--base' %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% comment %} ============= HALF-VERTICAL (400x480) ============= {% endcomment %}
+{% when 'half-vertical' %}
+<div class="layout layout--col gap--space-between">
+  <div class="grid">
+    {% render 'card', card: hero, value_size: 'value--xxlarge lg:value--xxxlarge', label_size: 'label--large' %}
+  </div>
+  {% if cards.size > 1 %}
+  <div class="divider"></div>
+  <div class="grid grid--cols-2 gap--small">
+    {% for card in cards offset: 1 limit: 5 %}
+    {% render 'card', card: card, value_size: 'value--medium lg:value--large', label_size: 'label--small lg:label--base' %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% comment %} ================ QUADRANT (400x240) ================ {% endcomment %}
+{% when 'quadrant' %}
+<div class="layout layout--col">
+  <div class="flex flex--row gap--small flex--center-y grow">
+    <div class="flex flex--col flex--center-y no-shrink">
+      {% render 'card', card: hero, value_size: 'value--xlarge lg:value--xxlarge', label_size: 'label--small lg:label--base' %}
+    </div>
+    {% if cards.size > 1 %}
+    <div class="flex flex--col gap--small grow">
+      {% for card in cards offset: 1 limit: 2 %}
+      {% render 'card', card: card, value_size: 'value--base lg:value--medium', label_size: 'label--small' %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endcase %}
+{% endif %}
+
+{% render 'title_bar', trmnl: trmnl, layout_size: layout_size, updated_display: updated_display %}
+{% endtemplate %}

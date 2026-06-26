@@ -1,0 +1,13 @@
+{
+  "cards": [
+    { "key": "all_open", "label": "All Open", "value": 909 },
+    { "key": "all_unassigned", "label": "All Unassigned", "value": 1 },
+    { "key": "all_past_due", "label": "All Past Due", "value": 22 },
+    { "key": "all_due_today", "label": "All Due Today", "value": 62 },
+    { "key": "all_created_today", "label": "All Created Today", "value": 23 },
+    { "key": "all_closed_today", "label": "All Closed Today", "value": 26 },
+    { "key": "all_unresponded", "label": "All Unresponded", "value": 634 }
+  ],
+  "updated": "2026-06-26T18:46:06Z",
+  "error": null
+}
