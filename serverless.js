@@ -6,9 +6,11 @@
  * the returned object's keys as merge variables (`cards`, `updated`, `error`).
  *
  * It turns the user's selected metrics into one small, ordered `cards` array of
- * { key, label, value } — far under TRMNL's 100 KB payload cap regardless of queue size,
- * because every query asks for `size=1` and we only read the count from the pagination
- * metadata. The markup renders cards[0] as the hero and the rest as a stat grid.
+ * { key, label, name, scope, value } — far under TRMNL's 100 KB payload cap regardless of
+ * queue size, because every query asks for `size=1` and we only read the count from the
+ * pagination metadata. The markup promotes the chosen `hero` metric to the big number and
+ * splits the rest into ME (`scope: 'my'`) and ALL (`scope: 'all'`) columns; `name` is the
+ * scope-stripped label ("Open") so the column header can carry the scope.
  *
  * Verified live against hopecollege.happyfox.com (2026-06-26):
  *   - grand total lives in `page_info.last_index`
@@ -21,7 +23,7 @@
 // "{today}" is replaced with yyyy/mm/dd in the user's tz. `allOnly: true` means there's
 // no "My ..." variant (a My-scoped unassigned set is always empty). Object insertion
 // order defines the canonical card render order. To add a metric, edit only this map
-// (and the matching option in the README form-builder list).
+// (and the matching options in the README's two form-builder lists — Metrics and Hero).
 const METRICS = {
   open: { status: '_pending', q: '', label: 'Open' },
   unassigned: { status: '_pending', q: 'unassigned:true', label: 'Unassigned', allOnly: true },
@@ -73,7 +75,14 @@ async function run(input) {
   const apiKey = String(cf.api_key || '').trim();
   const authCode = String(cf.auth_code || '').trim();
   const agent = String(cf.agent || '').trim().replace(/ /g, '+'); // spaces -> + for HappyFox
-  const selected = selectedMetrics(cf.metrics);
+  let selected = selectedMetrics(cf.metrics);
+
+  // The hero (big number) is a single chosen metric. Always fetch it, even if the user
+  // didn't also tick it in the metrics multi-select, so the template never points at a gap.
+  const heroKey = String(cf.hero || '').trim().toLowerCase();
+  if (heroKey && !selected.includes(heroKey)) {
+    selected = METRIC_ORDER.filter((k) => selected.includes(k) || k === heroKey);
+  }
 
   const tz = input && input.trmnl && input.trmnl.user && input.trmnl.user.time_zone_iana;
   const today = todayInTz(tz);
@@ -106,17 +115,18 @@ async function run(input) {
     const isMine = key.startsWith('my_');
     const baseKey = key.replace(/^(my_|all_)/, '');
     const def = METRICS[baseKey];
-    const label = (isMine ? 'My ' : 'All ') + (def ? def.label : baseKey);
-    if (!def) return { key, label, value: null };
+    const scope = isMine ? 'my' : 'all';
+    const name = def.label;                          // scope-stripped, for column headers
+    const label = (isMine ? 'My ' : 'All ') + name;  // full, for the standalone hero
 
     const parts = [];
     if (def.q) parts.push(def.q.replace('{today}', today));
     if (isMine) parts.push('assignee:"' + agent + '"');
 
     try {
-      return { key, label, value: await total(def.status, buildQ(parts)) };
+      return { key, label, name, scope, value: await total(def.status, buildQ(parts)) };
     } catch (e) {
-      return { key, label, value: null };
+      return { key, label, name, scope, value: null };
     }
   }));
 

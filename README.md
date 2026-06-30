@@ -1,9 +1,10 @@
 # HappyFox
 
 A glanceable TRMNL e-ink dashboard for a [HappyFox](https://www.happyfox.com/) help desk.
-You compose the screen from a flat list of scoped metrics — "All Open", "My Past Due",
-"All Unresponded", etc. The first selected metric (in the list's order) becomes the big hero
-number; the rest fill a stat-card grid, tailored to each of the four TRMNL sizes.
+You pick the scoped metrics you care about — "All Open", "My Past Due", "All Unresponded",
+etc. — and choose one as the **hero** (the big number up top). The rest split into two
+columns: **ME** (your `my_*` metrics) and **ALL** (team-wide `all_*` metrics), each
+tailored to the four TRMNL sizes.
 
 All metrics are **behavior- and date-based**, so they work on any HappyFox instance
 regardless of its custom status names (every status rolls up to either `pending` or
@@ -74,36 +75,59 @@ and **Auth code**. The API uses HTTP Basic auth (`apiKey:authCode`).
 - keyname: metrics
   field_type: select
   name: Metrics to show
-  description: The hero (big number) is the first selected metric in this list's order. Pick more than ~8 and smaller sizes drop the tail.
+  description: The data points to display. They split into ME / ALL columns below the hero; pick more than ~8 and smaller sizes show a "+N more" count.
   multiple: true
   options:
-    - "All Open": all_open
-    - "My Open": my_open
-    - "All Unassigned": all_unassigned
-    - "All Due Today": all_due_today
-    - "My Due Today": my_due_today
-    - "All Past Due": all_past_due
-    - "My Past Due": my_past_due
-    - "All Created Today": all_created_today
-    - "My Created Today": my_created_today
-    - "All Closed Today": all_closed_today
-    - "My Closed Today": my_closed_today
-    - "All SLA Breached": all_breached
-    - "My SLA Breached": my_breached
-    - "All Unresponded": all_unresponded
-    - "My Unresponded": my_unresponded
+    - "All Open: all_open"
+    - "My Open: my_open"
+    - "All Unassigned: all_unassigned"
+    - "All Due Today: all_due_today"
+    - "My Due Today: my_due_today"
+    - "All Past Due: all_past_due"
+    - "My Past Due: my_past_due"
+    - "All Created Today: all_created_today"
+    - "My Created Today: my_created_today"
+    - "All Closed Today: all_closed_today"
+    - "My Closed Today: my_closed_today"
+    - "All SLA Breached: all_breached"
+    - "My SLA Breached: my_breached"
+    - "All Unresponded: all_unresponded"
+    - "My Unresponded: my_unresponded"
+- keyname: hero
+  field_type: select
+  name: Hero metric (big number)
+  description: The single metric shown as the large number up top. Leave blank to use your first selected metric. Always fetched even if it isn't ticked above.
+  optional: true
+  options:
+    - "All Open: all_open"
+    - "My Open: my_open"
+    - "All Unassigned: all_unassigned"
+    - "All Due Today: all_due_today"
+    - "My Due Today: my_due_today"
+    - "All Past Due: all_past_due"
+    - "My Past Due: my_past_due"
+    - "All Created Today: all_created_today"
+    - "My Created Today: my_created_today"
+    - "All Closed Today: all_closed_today"
+    - "My Closed Today: my_closed_today"
+    - "All SLA Breached: all_breached"
+    - "My SLA Breached: my_breached"
+    - "All Unresponded: all_unresponded"
+    - "My Unresponded: my_unresponded"
 - keyname: timemode
   field_type: select
   name: Time format
   description: Used for the "Updated" timestamp.
   options:
-    - "12-hour": 12_hour
-    - "24-hour": 24_hour
+    - "12-hour: 12_hour"
+    - "24-hour: 24_hour"
 ```
 
 > Option format: the TRMNL form builder takes each label/value pair as a single
-> `"Label: value"` string (not a YAML mapping). The order of these options is also the
-> on-screen order, and the first one you enable becomes the hero.
+> `"Label: value"` string (not a YAML mapping). The order of these options is the
+> on-screen order, and — within each scope — the column render order. The **Hero metric**
+> field picks the big number independently; leave it blank to fall back to the first
+> selected metric.
 
 > If you pick any `My …` metric, fill in **My Agent Email**. Use the agent's email (HappyFox
 > matches assignee by email / username / first / last name, case-sensitive exact match).
@@ -112,18 +136,22 @@ and **Auth code**. The API uses HTTP Basic auth (`apiKey:authCode`).
 
 | Variable | Type | Notes |
 |----------|------|-------|
-| `cards` | array | `[{ "key", "label", "value" }]`, in canonical option order. `value` is an integer, or `null` if that query failed (rendered as "—"). |
+| `cards` | array | `[{ "key", "label", "name", "scope", "value" }]`, in canonical option order. `name` is the scope-stripped label ("Open"); `scope` is `"my"` or `"all"`. `value` is an integer, or `null` if that query failed (rendered as "—"). |
 | `updated` | string | ISO-8601 UTC timestamp of the refresh. |
 | `error` | string/null | A human-readable message when no cards could be produced (shown centered). |
 
 ## Layouts
 
-| Size | Shows |
-|------|-------|
-| `full` (800×480) | Hero + up to 7 cards in a 4-col grid |
-| `half-horizontal` (800×240) | Hero left + up to 3 cards right |
-| `half-vertical` (400×480) | Hero + up to 5 cards in a 2-col grid |
-| `quadrant` (400×240) | Hero + up to 2 cards |
+Each size shows the **hero** (big number) plus the remaining metrics, split by scope into
+`ME` / `ALL`. Each column caps to a per-size number of rows and shows a "+N more" line
+when you've selected more than fit.
+
+| Size | Layout |
+|------|--------|
+| `full` (800×480) | Hero on top, then `ME` and `ALL` as horizontal bands spanning the width |
+| `half-horizontal` (800×240) | Hero on the left, `ME` and `ALL` as two stacked rows to the right |
+| `half-vertical` (400×480) | Hero on top, then `ME` and `ALL` as two side-by-side columns |
+| `quadrant` (400×240) | Hero + the next four metrics (too small for labeled scopes) |
 
 ## License
 

@@ -4,10 +4,13 @@ Guidance for Claude Code working in this plugin.
 
 ## Project Overview
 
-A TRMNL plugin that shows a glanceable HappyFox help-desk dashboard: a hero count plus a
-grid of supporting data-point cards (no charts). The user composes the screen from a flat
-multi-select of scoped metrics (`all_*` / `my_*`); `cards[0]` is the hero, the rest fill a
-per-size-capped grid.
+A TRMNL plugin that shows a glanceable HappyFox help-desk dashboard: one user-chosen hero
+count plus the remaining data points split into `ME` (`my_*`) and `ALL` (`all_*`) scope
+columns (no charts). The user multi-selects scoped metrics (`all_*` / `my_*`) and picks one
+as the hero via a dedicated `hero` field; the rest fill auto-capped per-scope lists. The
+serverless emits each card as `{ key, label, name, scope, value }` — `name` is the
+scope-stripped label ("Open") so the column header carries the scope, `scope` drives the
+split. Hero falls back to `cards[0]` when the `hero` field is blank.
 
 ## Data Source
 
@@ -54,17 +57,41 @@ through (template partial scope is isolated — pass everything the partial need
 
 - `main` — parses `updated` into a localized "Updated" time (respects the `timemode` custom
   field, same approach as `nws-severe-weather`/`ham-radio-solar-weather`), handles the
-  empty/error state, then branches per `layout_size`. `cards[0]` = hero; `{% for card in
-  cards offset: 1 limit: N %}` fills the grid (N caps per size).
-- `card` — one stat card (`item`/`meta`/`content` with a `value` + `label`). Sizes are
-  passed in (`value_size`, `label_size`) with `lg:` variants to scale up on TRMNL X.
+  empty/error state, resolves the hero (the card whose `key` matches the `hero` field, else
+  `cards[0]`), splits the rest into `my`/`all` via `cards | where: 'scope', …`, then branches
+  per `layout_size`. The `my_count`/`all_count` guards (scope size minus the hero if it lives
+  in that scope) hide an empty column header.
+- `scope_group` — the single labeled scope template (replaces the old `scope_column` /
+  `scope_row`): a `Me`/`All` header over the scope's non-hero cards, capped in
+  Liquid at `item_limit` with a hand-rendered "+N more" tail (`total_count` precomputed). The
+  caller passes `inner_class` to lay the cards out — `grid grid--cols-6` (full, item_limit 5)
+  or `grid grid--cols-5` (half-horizontal, item_limit 4). The grids make the two scope rows
+  align column-to-column. (half-vertical uses `overflow_scope` instead, below.) The root carries
+  `self--stretch` (the parent `flex--col` sets `align-items:center`, so a short row would
+  otherwise shrink + center) and the header `self--start` keeps it left while the row fills
+  width. NB: the framework `list` auto-cap engine (`data-list-limit` etc.) did **not**
+  initialize reliably nested here — it swallowed the header and didn't cap — so capping is
+  explicit. `quadrant` skips `scope_group` (too small) and renders the hero + next four cards
+  directly.
+- `overflow_scope` — the half-vertical scope template: a labeled `.list` column handed to the
+  framework overflow engine (`data-overflow` + `-max-height="auto"` + `-counter`), which shows
+  as many cards as fit the real portrait height and appends "and N more" itself. half-vertical
+  is the one size that must FILL the height, so it diverges from `scope_group`'s static cap.
+- `card` — one stat (`item`/`meta`/`content` with a `value` + `label`). `label_text` overrides
+  the shown label (`scope_group` passes `card.name`, the scope-stripped form; the hero uses
+  full `card.label`). Sizes passed in (`value_size`, `label_size`) with `lg:` variants for TRMNL X.
 - `title_bar` — inline HappyFox logo mark (from `hf-logo-light.svg`, brand orange
   `fill="#ff5a00"`), instance name, localized "Updated" time.
 
 ## Design / framework notes
 
 - Follows the design-system "values type — large hero numbers" pattern: hero
-  `value--xxxlarge` + `divider` + a grid of `value--small`-ish cards.
+  `value--xxxlarge`/`giga` + `divider` + scope groups of smaller `item` cards, each scope a
+  plain `Me`/`All` header over a grid of cards. Full stacks two `grid--cols-6`
+  bands (so ME/ALL columns line up); half-horizontal puts the hero on the left and stacks
+  the two scopes as `grid--cols-5` rows that fill the width; half-vertical puts the two
+  scopes side by side as overflow-capped `.list` columns. The body values step down from the
+  hero (`value--large`/`small`/`base`) so the chosen hero clearly dominates.
 - `data-value-format="true"` auto-abbreviates big counts (e.g. 1234 → 1.2k); `value--tnums`
   keeps digits tabular. `data-clamp` truncates long labels.
 - Null card values render as "—" via `| default: '—'` (0 is preserved — it's not nil).
@@ -73,11 +100,19 @@ through (template partial scope is isolated — pass everything the partial need
 
 ## Framework gotchas (ground truth = the compiled CSS, not the docs)
 
-`framework_v3.1.1.css` in the repo root is a **partial** core file — it's missing utility
-classes that the live framework (and the working sibling plugins) clearly have
-(`justify--*`, `value--medium`, `label--xsmall`, the `data-*` attributes). When verifying a
-class, prefer (1) what a deployed sibling plugin uses, then (2) the skill's
-`template_guide.md`, then (3) `https://trmnl.com/css/latest/plugins.css`. Other repo-wide
+`framework_3.1.1_plugins.css` / `.js` / `.md` in the repo root are the **full** v3.1.1
+framework (grep these first when verifying a class). The older `framework_v3.1.1.css` is a
+**partial** and is missing classes the live framework has (`justify--*`,
+`label--xsmall`, the `data-*` attributes). (Note: `value--medium` and a `text--uppercase`
+utility do **not** exist in the full framework either — grep before relying on a class.) Note: the framework ships **no** rotate /
+`writing-mode` / vertical-text utility — confirmed by grepping the full CSS+JS. (This is why
+an earlier full-view design used rotated vertical ME/ALL tabs via a custom `.hf-scope-tab`
+`<style>` rule; that has since been dropped in favor of plain headers, so the plugin now uses
+framework classes only — no `<style>` block.) Also confirmed in the CSS: `.flex--col` sets
+`align-items:center`, so a flex column centers (and shrinks) short children — use
+`self--stretch` on a child to force full width (this is why `scope_group` carries it). When
+verifying a class, prefer (1) the full framework files here, then (2) what a deployed sibling
+plugin uses, then (3) the skill's `template_guide.md`, then (4) `https://trmnl.com/css/latest/plugins.css`. Other repo-wide
 gotchas (`.layout` clips not scrolls; `stretch` for grow+shrink; `flex--center-*` are
 direction-aware; no `lg:h--`) are documented in `../ham-radio-solar-weather/CLAUDE.md`.
 
@@ -87,5 +122,7 @@ direction-aware; no `lg:h--`) are documented in `../ham-radio-solar-weather/CLAU
 2. Tailor each size — drop the grid tail (`limit`) rather than overflow; `.layout` clips.
 3. Guard every `{{ }}`; `cards` can be empty and any `value` can be `null`.
 4. Keep the title_bar icon inline (no network URLs — they can fail on-device).
-5. No inline styles, no emojis, no custom CSS — framework classes only.
+5. No inline styles, no emojis, no custom CSS — framework classes only. (The template now
+   holds to this with no exceptions; the old `.hf-scope-tab` `<style>` rotate hack is gone.)
+   For alignment quirks reach for `self--stretch` / `self--start` / grid columns, not CSS.
 6. `.dev.vars` holds live API creds for testing and must never be committed.

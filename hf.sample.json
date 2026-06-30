@@ -1,12 +1,12 @@
 {
   "cards": [
-    { "key": "all_open", "label": "All Open", "value": 909 },
-    { "key": "all_unassigned", "label": "All Unassigned", "value": 1 },
-    { "key": "all_past_due", "label": "All Past Due", "value": 22 },
-    { "key": "all_due_today", "label": "All Due Today", "value": 62 },
-    { "key": "all_created_today", "label": "All Created Today", "value": 23 },
-    { "key": "all_closed_today", "label": "All Closed Today", "value": 26 },
-    { "key": "all_unresponded", "label": "All Unresponded", "value": 634 }
+    { "key": "all_open", "label": "All Open", "name": "Open", "scope": "all", "value": 909 },
+    { "key": "my_open", "label": "My Open", "name": "Open", "scope": "my", "value": 38 },
+    { "key": "all_unassigned", "label": "All Unassigned", "name": "Unassigned", "scope": "all", "value": 1 },
+    { "key": "all_due_today", "label": "All Due Today", "name": "Due Today", "scope": "all", "value": 62 },
+    { "key": "my_due_today", "label": "My Due Today", "name": "Due Today", "scope": "my", "value": 7 },
+    { "key": "all_past_due", "label": "All Past Due", "name": "Past Due", "scope": "all", "value": 22 },
+    { "key": "my_past_due", "label": "My Past Due", "name": "Past Due", "scope": "my", "value": 5 }
   ],
   "updated": "2026-06-26T18:46:06Z",
   "error": null
