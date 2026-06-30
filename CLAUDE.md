@@ -70,9 +70,15 @@ through (template partial scope is isolated — pass everything the partial need
   `self--stretch` (the parent `flex--col` sets `align-items:center`, so a short row would
   otherwise shrink + center) and the header `self--start` keeps it left while the row fills
   width. NB: the framework `list` auto-cap engine (`data-list-limit` etc.) did **not**
-  initialize reliably nested here — it swallowed the header and didn't cap — so capping is
-  explicit. `quadrant` skips `scope_group` (too small) and renders the hero + next four cards
-  directly.
+  initialize reliably nested in a `grid` scope_group — it swallowed the header and didn't cap —
+  so capping there is explicit Liquid. `quadrant` also uses `scope_group`: the `Me`/`All` groups
+  (a `grid grid--cols-2` inner, item_limit 2) sit beside the hero in a landscape slot but stack
+  under it in portrait via `portrait:flex--col` on the outer row. That orientation flip is the
+  truncation fix — a hero-on-the-left in the ~240px-wide portrait frame squeezed cards to ~60px
+  ("Open"→"Oper"); stacking hands them the full width. (quadrant can stay static where half-vertical
+  can't because its two mounts are opposite orientations — landscape 400x240 vs portrait 240x400 —
+  each a fixed size `portrait:` distinguishes, whereas half-vertical is portrait-shaped in both.)
+  The scope header carries the scope so card labels stay scope-stripped ("Open", not "All Open").
 - `overflow_scope` — the half-vertical scope template: a labeled `.list` column handed to the
   framework overflow engine (`data-overflow` + `-max-height="auto"` + `-counter`), which shows
   as many cards as fit the real portrait height and appends "and N more" itself. half-vertical
