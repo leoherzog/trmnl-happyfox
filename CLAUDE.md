@@ -65,7 +65,7 @@ through (template partial scope is isolated — pass everything the partial need
   Liquid at `item_limit` with a hand-rendered "+N more" tail (`total_count` precomputed). The
   caller passes `inner_class` to lay the cards out — `grid grid--cols-6` (full, item_limit 5)
   or `grid grid--cols-5` (half-horizontal, item_limit 4). The grids make the two scope rows
-  align column-to-column. (half-vertical uses `overflow_scope` instead, below.) The root carries
+  align column-to-column. half-vertical uses its own templates, below. The root carries
   `self--stretch` (the parent `flex--col` sets `align-items:center`, so a short row would
   otherwise shrink + center) and the header `self--start` keeps it left while the row fills
   width. NB: the framework `list` auto-cap engine (`data-list-limit` etc.) did **not**
@@ -74,14 +74,17 @@ through (template partial scope is isolated — pass everything the partial need
   (a `grid grid--cols-2` inner, item_limit 2) sit beside the hero in a landscape slot but stack
   under it in portrait via `portrait:flex--col` on the outer row. That orientation flip is the
   truncation fix — a hero-on-the-left in the ~240px-wide portrait frame squeezed cards to ~60px
-  ("Open"→"Oper"); stacking hands them the full width. (quadrant can stay static where half-vertical
-  can't because its two mounts are opposite orientations — landscape 400x240 vs portrait 240x400 —
-  each a fixed size `portrait:` distinguishes, whereas half-vertical is portrait-shaped in both.)
+  ("Open"→"Oper"); stacking hands them the full width.
   The scope header carries the scope so card labels stay scope-stripped ("Open", not "All Open").
-- `overflow_scope` — the half-vertical scope template: a labeled `.list` column handed to the
-  framework overflow engine (`data-overflow` + `-max-height="auto"` + `-counter`), which shows
-  as many cards as fit the real portrait height and appends "and N more" itself. half-vertical
-  is the one size that must FILL the height, so it diverges from `scope_group`'s static cap.
+- half-vertical — `main` counts body rows (one per metric type with both scopes, else the cards
+  in pairs) and picks hero, card and gap sizes from that count. Each tier sets both `md` and `lg:`
+  values, since a `value--*` is the same CSS px on OG and TRMNL X. `metric_rows` renders a Me |
+  All header over a `grid--cols-2` with one row per metric, so a metric's two counts sit side by
+  side. Past six rows, OG shows five plus a `lg:hidden` "+N more" line, while TRMNL X shows all
+  eight. `scope_grid` renders one scope's cards in two columns, at most four rows. Both grids
+  stretch to the slot height, so CSS grid stretches their rows to fill it.
+- After changing a half-vertical tier, re-check screenshots on `og_plus` and `v2` in both
+  orientations, with one scope, two scopes and every metric selected.
 - `card` — one stat (`item`/`meta`/`content` with a `value` + `label`). `label_text` overrides
   the shown label (`scope_group` passes `card.name`, the scope-stripped form; the hero uses
   full `card.label`). Sizes passed in (`value_size`, `label_size`) with `lg:` variants for TRMNL X.
@@ -90,7 +93,8 @@ through (template partial scope is isolated — pass everything the partial need
   `<span data-dt="{epoch}" data-dt-style="time">`; a `<script>` at the end of `main`
   formats every `[data-dt]` with `Intl.DateTimeFormat` in the user's `locale` /
   `time_zone_iana`, forcing `hour12` from the `timemode` field. This keeps the display
-  DST-correct and locale-aware (same approach as `nws-severe-weather`).
+  DST-correct and locale-aware (same approach as `nws-severe-weather`). The name is left out of
+  quadrant and hidden in a portrait-mounted half-vertical, which are too narrow for it.
 
 ## Design / framework notes
 
@@ -98,9 +102,9 @@ through (template partial scope is isolated — pass everything the partial need
   `value--xxxlarge`/`giga` + `divider` + scope groups of smaller `item` cards, each scope a
   plain `Me`/`All` header over a grid of cards. Full stacks two `grid--cols-6`
   bands (so ME/ALL columns line up); half-horizontal puts the hero on the left and stacks
-  the two scopes as `grid--cols-5` rows that fill the width; half-vertical puts the two
-  scopes side by side as overflow-capped `.list` columns. The body values step down from the
-  hero (`value--large`/`small`/`base`) so the chosen hero clearly dominates.
+  the two scopes as `grid--cols-5` rows that fill the width; half-vertical aligns the scopes
+  as Me | All columns, one row per metric. The body values step down from the hero so the
+  chosen hero clearly dominates.
 - `data-value-format="true"` auto-abbreviates big counts (e.g. 1234 → 1.2k); `value--tnums`
   keeps digits tabular. `data-clamp` truncates long labels.
 - Null card values render as "—" via `| default: '—'` (0 is preserved — it's not nil).
@@ -124,6 +128,24 @@ verifying a class, prefer (1) the full framework files here, then (2) what a dep
 plugin uses, then (3) the skill's `template_guide.md`, then (4) `https://trmnl.com/css/latest/plugins.css`. Other repo-wide
 gotchas (`.layout` clips not scrolls; `stretch` for grow+shrink; `flex--center-*` are
 direction-aware; no `lg:h--`) are documented in `../ham-radio-solar-weather/CLAUDE.md`.
+
+Verified against the live 3.4.3 CSS and JS:
+- `.layout` centers its children, and they keep `min-height:auto`, so a stretched body grows
+  past the slot instead of shrinking. Adding `flex` to the layout lets `.flex>.stretch` set
+  `min-height:0`.
+- `data-overflow-max-cols` is read only on a `.columns` element; on `.list` it does nothing,
+  and `.list` is deprecated. The `.columns` engine fills each column before starting the next,
+  so it leaves a second column empty when everything fits in the first.
+- On OG half-vertical the generic `data-overflow` engine's height budget runs about 20px long,
+  so its own "and N more" label gets clipped. Size to fit instead of relying on it.
+- `lg:flex` also sets `gap:var(--gap)`, which widens an `.item`'s meta-to-content gap. Hide and
+  show an item through a wrapper with `hidden lg:block`.
+- `data-value-fit` (alias `data-fit-value`) only shrinks a value to its width; nothing grows text
+  to fill a box. Prefixes are `sm:`/`md:`/`lg:` by device and `portrait:`/`landscape:` by
+  mount, never by mashup slot.
+- The plugin MCP `MarkupsScreenshotTool` runs the framework JS. Poll its job once with
+  `AsyncResultTool`, because a finished result is gone after the first read. The OAuth
+  connector's `getPreview` returns the PNG inline as base64.
 
 ## Vestaboard
 

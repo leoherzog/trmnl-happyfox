@@ -6,19 +6,13 @@ HappyFox — renders a glanceable help-desk dashboard from the serverless aggreg
 top-level merge variables, so the four size files pass `cards`, `updated`, and `error`
 straight through.
 
-Layout model (v0.7): one user-chosen HERO (big number) leads, then the remaining metrics split by
-scope into ME (`my_*`) and ALL (`all_*`), each rendered as a ME/ALL header over its cards. Three
-sizes use the static `scope_group` (a Liquid cap + "+N more" tail, which also renders capped in the
-editor preview): full stacks the two scope rows under the hero; half-horizontal puts the hero left
-of them; quadrant stacks the hero over its two scope groups in portrait but beside them in landscape
-(`portrait:flex--col`). Only half-vertical uses `overflow_scope` (the framework overflow engine):
-it's portrait-shaped in BOTH mounts (≈480px slot vs ≈800px portrait — same orientation, different
-height, CSS-indistinguishable), so only a height-measuring engine can fill it. quadrant can stay
-static because its two mounts are opposite orientations (landscape 400x240 vs portrait 240x400), each
-a fixed size `portrait:` tells apart. `card.scope` ('my'/'all') drives the split; `card.name` is the
-scope-stripped label ("Open" instead of "My Open") so the header carries the scope. The hero
-is whichever metric matches the `hero` custom field, falling back to the first card. All
-rendering lives here; the four size files are thin {% raw %}{% render 'main', ... %}{% endraw %} wrappers that pass a `layout_size`.
+Layout model: one user-chosen HERO (big number) leads, then the remaining metrics split by scope
+into ME (`my_*`) and ALL (`all_*`). full, half-horizontal and quadrant use `scope_group`, a Me/All
+header over a Liquid-capped card row. half-vertical uses `metric_rows` when both scopes show and
+`scope_grid` when one does, sizing everything from the row count so the body fills the slot.
+`card.name` is the scope-stripped label ("Open" instead of "My Open") so the header carries the
+scope. The hero is the card matching the `hero` custom field, else the first card. The four size
+files are thin {% raw %}{% render 'main', ... %}{% endraw %} wrappers that pass a `layout_size`.
 {% endcomment %}
 
 {% comment %} ---- one stat: a value over its (optionally scope-stripped) label ---- {% endcomment %}
@@ -47,8 +41,9 @@ rendering lives here; the four size files are thin {% raw %}{% render 'main', ..
       <clipPath id="hf_clip1"><rect transform="translate(0 .56641)" width="18.979" height="18.835" fill="#fff"/></clipPath>
     </defs>
   </svg>
-  {% if layout_size == 'full' or layout_size == 'half-horizontal' %}
-  <span class="title">{{ trmnl.plugin_settings.instance_name | default: 'HappyFox' }}</span>
+  {% if layout_size != 'quadrant' %}
+  {%- comment -%} A portrait-mounted half-vertical is too narrow for the name beside the time. {%- endcomment -%}
+  <span class="title{% if layout_size == 'half-vertical' %} portrait:hidden{% endif %}">{{ trmnl.plugin_settings.instance_name | default: 'HappyFox' }}</span>
   {% endif %}
   {% if updated %}
   <span class="instance">Updated <span data-dt="{{ updated | date: '%s' }}" data-dt-style="time"></span></span>
@@ -64,9 +59,7 @@ container — a `grid grid--cols-N` so rows align column-to-column. Everything i
 carries `self--stretch` — the per-size middle container, the scope_group root, and the inner card
 grid — because each level is a `flex--col` (`align-items:center`), which otherwise shrinks + centers
 a short grid to its content width. The header `self--start` keeps it left. Capping is explicit
-(Liquid, not the framework overflow JS) so it renders identically in the editor preview and
-on-device. (half-vertical is portrait-shaped in both mounts, so its height is variable — it uses
-`overflow_scope` instead.)
+Liquid, not the framework overflow JS.
 {% endcomment %}
 {% template scope_group %}
 <div class="flex flex--col gap--small self--stretch">
@@ -86,25 +79,55 @@ on-device. (half-vertical is portrait-shaped in both mounts, so its height is va
 {% endtemplate %}
 
 {% comment %}
----- one OVERFLOW scope (half-vertical only): a labeled `.list` column handed to the framework
-overflow engine. half-vertical is portrait-shaped in both mounts so its height varies (≈480px in a
-landscape slot vs ≈800px mounted portrait), and a static Liquid cap can't serve both — the engine reads
-its parent's real `clientHeight` (`data-overflow-max-height="auto"`) and shows as many cards as fit,
-appending "and N more" (`data-overflow-counter`). `data-overflow-max-cols="1"` keeps it one column
-in the narrow cell. The `.list stretch` here + `stretch` on the parent row give the engine a bounded
-height to measure against (so it caps instead of overrunning). The `.label` header sits inside the
-`.list` — the engine only hides `.item` cards, not the header. This is the structure proven on real
-hardware (it renders "and N more" correctly there).
-NB the engine is JS: TRMNL's device/render pipeline runs it, but the editor's live preview and the
-screenshot tool static-render, so THERE the cards show uncapped. That's fine — in the tall portrait
-frame all the cards fit anyway; the engine only needs to trim on the short 480px landscape slot. ----
+---- half-vertical body, both scopes: a Me | All header over one grid row per metric type, so a
+metric's two counts sit side by side. A missing or hero cell is an empty placeholder. Past six rows,
+OG shows five plus a "+N more" line, since the overflow engine's budget runs about 20px long there
+and clips its own counter. TRMNL X fits all eight possible rows. Capped cells sit in a
+`hidden lg:block` wrapper because `lg:flex` on the `.item` would also widen its internal gap. The
+grid keeps the slot height, so its rows stretch to fill it. The overflow engine stays as a fallback
+for other screens. ----
 {% endcomment %}
-{% template overflow_scope %}
-<div class="list stretch" data-overflow="true" data-overflow-max-height="auto" data-overflow-counter="true" data-overflow-max-cols="1">
-  <span class="label label--small">{{ heading }}</span>
-  {% for card in scope_cards %}{% unless card.key == hero_key %}
-  {% render 'card', card: card, label_text: card.name, value_size: 'value--small lg:value--base', label_size: 'label--small' %}
-  {% endunless %}{% endfor %}
+{% template metric_rows %}
+<div class="flex flex--col gap--small stretch">
+  <div class="grid grid--cols-2">
+    <span class="label label--small">Me</span>
+    <span class="label label--small">All</span>
+  </div>
+  {% assign scopes = 'my,all' | split: ',' %}
+  {% assign capped = 0 %}
+  <div class="grid grid--cols-2 stretch {{ grid_gap }}" data-overflow="true" data-overflow-max-height="auto" data-overflow-counter="true">
+    {% for t in types %}
+    {% assign cap = false %}{% if types.size > 6 and forloop.index > 5 %}{% assign cap = true %}{% endif %}
+    {% for scope in scopes %}
+    {% assign key = scope | append: '_' | append: t %}
+    {% assign c = cards | where: 'key', key | first %}
+    {% if cap %}<div class="hidden lg:block">{% endif %}
+    {% if c and c.key != hero_key %}
+    {% render 'card', card: c, label_text: c.name, value_size: value_size, label_size: label_size %}
+    {% if cap %}{% assign capped = capped | plus: 1 %}{% endif %}
+    {% else %}
+    <div></div>
+    {% endif %}
+    {% if cap %}</div>{% endif %}
+    {% endfor %}
+    {% endfor %}
+  </div>
+  {% if capped > 0 %}<span class="label label--small lg:hidden">+{{ capped }} more</span>{% endif %}
+</div>
+{% endtemplate %}
+
+{% comment %}
+---- half-vertical body, one scope: a header over the scope's non-hero cards in two columns. At
+most seven cards (four rows), which fits on every screen. ----
+{% endcomment %}
+{% template scope_grid %}
+<div class="flex flex--col gap--small stretch">
+  <span class="label label--small self--start">{{ heading }}</span>
+  <div class="grid grid--cols-2 stretch {{ grid_gap }}" data-overflow="true" data-overflow-max-height="auto" data-overflow-counter="true">
+    {% for card in scope_cards %}{% unless card.key == hero_key %}
+    {% render 'card', card: card, label_text: card.name, value_size: value_size, label_size: label_size %}
+    {% endunless %}{% endfor %}
+  </div>
 </div>
 {% endtemplate %}
 
@@ -184,34 +207,58 @@ frame all the cards fit anyway; the engine only needs to trim on the short 480px
   </div>
 </div>
 
-{% comment %} ============= HALF-VERTICAL (400x480, taller mounted portrait) ============= {% endcomment %}
-{% comment %} Narrow + tall, and the one size whose height varies by mount — so its two side-by-side
-`Me | All` columns use `overflow_scope` (the framework overflow engine) instead of a static cap, to
-fill whatever vertical space the device actually gives. `stretch` on this row gives the two `.list`
-columns a bounded height to measure against so the engine caps instead of overrunning. {% endcomment %}
+{% comment %} ============= HALF-VERTICAL (400x480; 520x780 on TRMNL X) ============= {% endcomment %}
+{% comment %} Body rows are one per metric type with both scopes, else the cards in pairs. Values are
+the same CSS px on OG and TRMNL X, so each tier sets both, and sizes step down as rows grow so the
+body fills the slot without overflowing. `flex` on the layout gives its `stretch` child a zero
+min-height; without it the body grows past the slot instead of shrinking. {% endcomment %}
 {% when 'half-vertical' %}
-<div class="layout layout--col">
-  <div class="grid">
-    {% render 'card', card: hero, value_size: 'value--large lg:value--xlarge', label_size: 'label--base lg:label--large' %}
+{% assign types = '' %}
+{% for card in cards %}{% unless card.key == hero_key %}
+{% assign t = card.key | remove_first: card.scope | remove_first: '_' %}
+{% assign probe = ',' | append: types | append: ',' %}
+{% assign needle = ',' | append: t | append: ',' %}
+{% unless probe contains needle %}{% assign types = types | append: ',' | append: t %}{% endunless %}
+{% endunless %}{% endfor %}
+{% assign types = types | remove_first: ',' | split: ',' %}
+{% if my_count > 0 and all_count > 0 %}
+{% assign rows = types.size %}
+{% else %}
+{% assign rows = my_count | plus: all_count | plus: 1 | divided_by: 2 %}
+{% endif %}
+{% assign hero_label = 'label--base lg:label--large' %}
+{% assign card_label = 'label--small lg:label--base' %}
+{% if rows <= 3 %}
+{% assign hero_size = 'value--xlarge lg:value--mega' %}{% assign card_size = 'value--base lg:value--xlarge' %}{% assign grid_gap = '' %}
+{% elsif rows == 4 %}
+{% assign hero_size = 'value--large lg:value--mega' %}{% assign card_size = 'value--small lg:value--large' %}{% assign grid_gap = 'gap--small lg:gap' %}
+{% elsif rows == 5 %}
+{% assign hero_size = 'value--large lg:value--xxxlarge' %}{% assign card_size = 'value--small lg:value--large' %}{% assign grid_gap = 'gap--small lg:gap' %}
+{% else %}
+{% assign hero_size = 'value--base lg:value--xxxlarge' %}{% assign hero_label = 'label--small lg:label--large' %}{% assign card_size = 'value--small lg:value--base' %}{% assign card_label = 'label--small' %}{% assign grid_gap = 'gap--xsmall lg:gap--small' %}
+{% if rows > 6 %}{% assign hero_size = 'value--base lg:value--xxlarge' %}{% assign hero_label = 'label--small lg:label--base' %}{% endif %}
+{% endif %}
+<div class="layout layout--col flex">
+  <div class="self--stretch">
+    {% render 'card', card: hero, value_size: hero_size, label_size: hero_label %}
   </div>
   {% if my_count > 0 or all_count > 0 %}
-  <div class="divider"></div>
-  <div class="flex flex--row gap--small stretch">
-    {% if my_count > 0 %}{% render 'overflow_scope', heading: 'Me', scope_cards: my_cards, hero_key: hero_key %}{% endif %}
-    {% if all_count > 0 %}{% render 'overflow_scope', heading: 'All', scope_cards: all_cards, hero_key: hero_key %}{% endif %}
-  </div>
+  <div class="divider self--stretch"></div>
+  {% if my_count > 0 and all_count > 0 %}
+  {% render 'metric_rows', cards: cards, types: types, hero_key: hero_key, value_size: card_size, label_size: card_label, grid_gap: grid_gap %}
+  {% elsif my_count > 0 %}
+  {% render 'scope_grid', heading: 'Me', scope_cards: my_cards, hero_key: hero_key, value_size: card_size, label_size: card_label, grid_gap: grid_gap %}
+  {% else %}
+  {% render 'scope_grid', heading: 'All', scope_cards: all_cards, hero_key: hero_key, value_size: card_size, label_size: card_label, grid_gap: grid_gap %}
+  {% endif %}
   {% endif %}
 </div>
 
 {% comment %} ============ QUADRANT (400x240, portrait 240x400) ============ {% endcomment %}
-{% comment %} The two narrow sizes split here: unlike half-vertical (portrait-shaped in BOTH mounts,
-so its height is variable + CSS-indistinguishable → overflow engine), quadrant's two mounts have
-OPPOSITE orientations — 400x240 landscape vs 240x400 portrait — each a fixed size that `portrait:`
-can tell apart. So quadrant keeps the static `scope_group` (which, unlike the engine, also renders
-capped in the editor preview) and just flips the hero from beside the columns to on top of them in
-portrait via `portrait:flex--col`. That stacking is the truncation fix: a hero-on-the-left in a
-~240px-wide portrait frame squeezed the cards to ~60px ("Open"→"Oper"); stacking hands them the full
-width. Capped low (`item_limit: 2`, `grid--cols-2`) so two stat cards per scope fit either way. {% endcomment %}
+{% comment %} quadrant's two mounts have opposite orientations, 400x240 landscape and 240x400
+portrait, so `portrait:flex--col` moves the hero from beside the scope groups to above them. A hero
+on the left of the ~240px portrait frame squeezed the cards to ~60px ("Open"→"Oper"). Capped low
+(`item_limit: 2`, `grid--cols-2`) so two stat cards per scope fit either way. {% endcomment %}
 {% when 'quadrant' %}
 <div class="layout">
   <div class="flex flex--row portrait:flex--col gap--small grow">

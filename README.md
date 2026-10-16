@@ -150,7 +150,7 @@ when you've selected more than fit.
 |------|--------|
 | `full` (800×480) | Hero on top, then `ME` and `ALL` as horizontal bands spanning the width |
 | `half-horizontal` (800×240) | Hero on the left, `ME` and `ALL` as two stacked rows to the right |
-| `half-vertical` (400×480) | Hero on top, then `ME` and `ALL` as two side-by-side columns |
+| `half-vertical` (400×480) | Hero on top, then one row per metric with its `ME` and `ALL` counts side by side, or one scope's cards in two columns. Sizes scale with the row count to fill the slot. |
 | `quadrant` (400×240) | Hero + the next four metrics (too small for labeled scopes) |
 
 ## Vestaboard
