@@ -1,0 +1,81 @@
+{%- comment -%}
+HappyFox on a Vestaboard (6x22 flaps): a header row, then one row per metric with Me / All
+counts in fixed columns. The hero metric leads and gets an orange flap beside its count. This is
+the text of the single Composer text layer in vestaboard.json; every literal space is emitted as
+{{ ' ' }} because all tags trim whitespace.
+
+Columns: label 0-10, Me count 11-15, gap 16, All count 17-21. Counts are right-aligned.
+{%- endcomment -%}
+
+{%- capture nl %}
+{% endcapture -%}
+{%- assign sp = '                      ' -%}
+
+{%- if error != blank or cards == blank -%}
+{{ 'HAPPYFOX' }}{{ nl }}{{ nl }}{{ error | default: 'No HappyFox data' | truncate: 88 }}
+{%- else -%}
+
+{%- comment -%} Hero: the card matching the `hero` field, else the first card. {%- endcomment -%}
+{%- assign hero = cards[0] -%}
+{%- assign hero_pick = trmnl.plugin_settings.custom_fields_values.hero -%}
+{%- if hero_pick != blank -%}
+{%- assign hero_match = cards | where: 'key', hero_pick -%}
+{%- if hero_match.size > 0 -%}{%- assign hero = hero_match[0] -%}{%- endif -%}
+{%- endif -%}
+{%- assign hero_type = hero.key | remove_first: hero.scope | remove_first: '_' -%}
+
+{%- comment -%} Metric types (key minus scope), hero first, then canonical card order. {%- endcomment -%}
+{%- assign types = hero_type -%}
+{%- for card in cards -%}
+{%- assign t = card.key | remove_first: card.scope | remove_first: '_' -%}
+{%- assign probe = ',' | append: types | append: ',' -%}
+{%- assign needle = ',' | append: t | append: ',' -%}
+{%- unless probe contains needle -%}{%- assign types = types | append: ',' | append: t -%}{%- endunless -%}
+{%- endfor -%}
+{%- assign types = types | split: ',' -%}
+
+{%- assign my_cards = cards | where: 'scope', 'my' -%}
+{%- assign all_cards = cards | where: 'scope', 'all' -%}
+{%- assign scopes = 'my,all' | split: ',' -%}
+
+{%- comment -%} Header row. {%- endcomment -%}
+{{ 'HAPPYFOX' | append: sp | slice: 0, 11 }}
+{%- if my_cards.size > 0 -%}{%- assign head = 'ME' -%}{%- else -%}{%- assign head = '' -%}{%- endif -%}
+{{ sp | append: head | slice: -5, 5 }}{{ ' ' }}
+{%- if all_cards.size > 0 -%}{%- assign head = 'ALL' -%}{%- else -%}{%- assign head = '' -%}{%- endif -%}
+{{ sp | append: head | slice: -5, 5 }}
+
+{%- comment -%} Metric rows: the five remaining board rows. {%- endcomment -%}
+{%- for t in types limit: 5 -%}
+{%- case t -%}
+{%- when 'open' -%}{%- assign label = 'OPEN' -%}
+{%- when 'unassigned' -%}{%- assign label = 'UNASSIGNED' -%}
+{%- when 'due_today' -%}{%- assign label = 'DUE TODAY' -%}
+{%- when 'past_due' -%}{%- assign label = 'PAST DUE' -%}
+{%- when 'created_today' -%}{%- assign label = 'NEW TODAY' -%}
+{%- when 'closed_today' -%}{%- assign label = 'DONE TODAY' -%}
+{%- when 'breached' -%}{%- assign label = 'SLA BREACH' -%}
+{%- when 'unresponded' -%}{%- assign label = 'UNRESPONDED' -%}
+{%- else -%}{%- assign label = t | replace: '_', ' ' -%}
+{%- endcase -%}
+{{ nl }}{{ label | append: sp | slice: 0, 11 }}
+{%- for scope in scopes -%}
+{%- if scope == 'all' -%}{{ ' ' }}{%- endif -%}
+{%- assign key = scope | append: '_' | append: t -%}
+{%- assign match = cards | where: 'key', key | first -%}
+{%- if match == nil -%}{%- assign v = '' -%}
+{%- elsif match.value == nil -%}{%- assign v = '-' -%}
+{%- elsif match.value > 9999 -%}{%- assign v = match.value | divided_by: 1000 | floor | append: 'K' -%}
+{%- else -%}{%- assign v = match.value | append: '' -%}
+{%- endif -%}
+{%- comment -%} {64} is one orange flap, so it pads as a single cell. It stays template text: Ruby Liquid ends {{ }} at the first closing brace. {%- endcomment -%}
+{%- if match.key == hero.key and v.size < 5 -%}
+{%- assign pad = 4 | minus: v.size -%}
+{{ sp | slice: 0, pad }}{64}{{ v }}
+{%- else -%}
+{{ sp | append: v | slice: -5, 5 }}
+{%- endif -%}
+{%- endfor -%}
+{%- endfor -%}
+
+{%- endif -%}

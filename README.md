@@ -153,6 +153,29 @@ when you've selected more than fit.
 | `half-vertical` (400×480) | Hero on top, then `ME` and `ALL` as two side-by-side columns |
 | `quadrant` (400×240) | Hero + the next four metrics (too small for labeled scopes) |
 
+## Vestaboard
+
+The plugin also runs on a [Vestaboard](https://help.trmnl.com/en/articles/17632479-vestaboard)
+Flagship. A split-flap board cannot render HTML, so its layout is a TRMNL Composer composition,
+`vestaboard.json`, whose one text layer holds the Liquid in `vestaboard.liquid`.
+
+```
+HAPPYFOX      ME   ALL
+PAST DUE      #5    22
+OPEN          40   746
+UNASSIGNED           1
+DUE TODAY      7    62
+NEW TODAY      3    40
+```
+
+Each row is one metric, with the Me and All counts in fixed columns. The hero leads, and an
+orange flap (`#` above) marks its count. Five metric rows fit, so any selected metric types past
+the fifth are left off. Counts over 9,999 show in thousands ("12K"), and a failed query shows "-".
+
+To install it, write `vestaboard.json` to the plugin's `vestaboard_canvas` through the TRMNL
+MCP server (`writeMarkup`). You can also open **Edit Composition** with your Vestaboard as the
+current device and paste `vestaboard.liquid` into a text layer set to box wrap, width 22.
+
 ## License
 
 MIT

@@ -50,8 +50,8 @@ rendering lives here; the four size files are thin {% raw %}{% render 'main', ..
   {% if layout_size == 'full' or layout_size == 'half-horizontal' %}
   <span class="title">{{ trmnl.plugin_settings.instance_name | default: 'HappyFox' }}</span>
   {% endif %}
-  {% if updated_display %}
-  <span class="instance">Updated {{ updated_display }}</span>
+  {% if updated %}
+  <span class="instance">Updated <span data-dt="{{ updated | date: '%s' }}" data-dt-style="time"></span></span>
   {% endif %}
 </div>
 {% endtemplate %}
@@ -109,18 +109,11 @@ frame all the cards fit anyway; the engine only needs to trim on the short 480px
 {% endtemplate %}
 
 {% template main %}
-{% comment %} time mask: respect the 12/24-hour custom field {% endcomment %}
+{% comment %} 12/24-hour: force from the timemode custom field, else let the locale decide {% endcomment %}
 {% if trmnl.plugin_settings.custom_fields_values.timemode == '24_hour' %}
-{% assign mask_time = '%H:%M' %}
+{% assign hour12 = 'false' %}
 {% else %}
-{% assign mask_time = '%-I:%M%P' %}
-{% endif %}
-
-{% comment %} aggregator stamps `updated` as ISO-8601 UTC; shift to the user's local time {% endcomment %}
-{% assign updated_display = nil %}
-{% if updated %}
-{% assign updated_local = updated | date: '%s' | plus: trmnl.user.utc_offset | date: '%Y-%m-%dT%H:%M:%S%z' %}
-{% assign updated_display = updated_local | l_date: mask_time, trmnl.user.locale %}
+{% assign hour12 = 'true' %}
 {% endif %}
 
 {% if error != blank or cards == blank %}
@@ -241,5 +234,31 @@ width. Capped low (`item_limit: 2`, `grid--cols-2`) so two stat cards per scope 
 {% endcase %}
 {% endif %}
 
-{% render 'title_bar', trmnl: trmnl, layout_size: layout_size, updated_display: updated_display %}
+{% render 'title_bar', trmnl: trmnl, layout_size: layout_size, updated: updated %}
+
+<script>
+(function () {
+  var locale = '{{ trmnl.user.locale }}' || undefined;
+  var timeZone = '{{ trmnl.user.time_zone_iana }}' || undefined;
+  var hour12 = {{ hour12 }};
+  function formatter(opts) {
+    opts.hour12 = hour12;
+    try {
+      return new Intl.DateTimeFormat(locale, Object.assign({ timeZone: timeZone }, opts));
+    } catch (e) {
+      {%- comment -%} Invalid locale or timezone: fall back to render-environment defaults {%- endcomment -%}
+      return new Intl.DateTimeFormat(undefined, opts);
+    }
+  }
+  var formats = {
+    time: formatter({ hour: 'numeric', minute: '2-digit' })
+  };
+  document.querySelectorAll('[data-dt]').forEach(function (el) {
+    var seconds = parseInt(el.getAttribute('data-dt'), 10);
+    if (!seconds) return;
+    var format = formats[el.getAttribute('data-dt-style')] || formats.time;
+    el.textContent = format.format(new Date(seconds * 1000));
+  });
+})();
+</script>
 {% endtemplate %}

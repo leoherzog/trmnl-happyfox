@@ -55,8 +55,7 @@ All rendering lives in `shared.liquid`; the four size files are one-line wrapper
 `{% render 'main', ... %}` with a `layout_size`, passing `cards` / `updated` / `error`
 through (template partial scope is isolated — pass everything the partial needs). Templates:
 
-- `main` — parses `updated` into a localized "Updated" time (respects the `timemode` custom
-  field, same approach as `nws-severe-weather`/`ham-radio-solar-weather`), handles the
+- `main` — derives `hour12` from the `timemode` custom field, handles the
   empty/error state, resolves the hero (the card whose `key` matches the `hero` field, else
   `cards[0]`), splits the rest into `my`/`all` via `cards | where: 'scope', …`, then branches
   per `layout_size`. The `my_count`/`all_count` guards (scope size minus the hero if it lives
@@ -87,7 +86,11 @@ through (template partial scope is isolated — pass everything the partial need
   the shown label (`scope_group` passes `card.name`, the scope-stripped form; the hero uses
   full `card.label`). Sizes passed in (`value_size`, `label_size`) with `lg:` variants for TRMNL X.
 - `title_bar` — inline HappyFox logo mark (from `hf-logo-light.svg`, brand orange
-  `fill="#ff5a00"`), instance name, localized "Updated" time.
+  `fill="#ff5a00"`), instance name, and the "Updated" time. The time is emitted as a
+  `<span data-dt="{epoch}" data-dt-style="time">`; a `<script>` at the end of `main`
+  formats every `[data-dt]` with `Intl.DateTimeFormat` in the user's `locale` /
+  `time_zone_iana`, forcing `hour12` from the `timemode` field. This keeps the display
+  DST-correct and locale-aware (same approach as `nws-severe-weather`).
 
 ## Design / framework notes
 
@@ -122,9 +125,39 @@ plugin uses, then (3) the skill's `template_guide.md`, then (4) `https://trmnl.c
 gotchas (`.layout` clips not scrolls; `stretch` for grow+shrink; `flex--center-*` are
 direction-aware; no `lg:h--`) are documented in `../ham-radio-solar-weather/CLAUDE.md`.
 
+## Vestaboard
+
+A Vestaboard Flagship cannot render HTML, so it gets a Composer composition instead of the
+four sizes. `vestaboard.json` is the plugin's `vestaboard_canvas` (`{id, name, width: 22,
+height: 6, background, layers}`). Its one text layer (`font: "vestaboard"`, `wrap_mode: "box"`,
+`box_width: 22`) holds the Liquid in `vestaboard.liquid`, which is the source of truth.
+
+- Rebuild and upload after editing the Liquid:
+  `jq --rawfile t vestaboard.liquid '.layers[0].text = $t' vestaboard.json > vb.tmp && mv vb.tmp vestaboard.json`,
+  then MCP `writeMarkup` with `size: vestaboard_canvas` and the compact JSON as `content`.
+- Text renders against the same merge variables, then one flap per character: `A-Z`, `0-9`
+  and `! @ # $ ( ) - + & = ; : ' " % , . / ? °`. Lowercase is uppercased. Anything else, such
+  as accented letters, emoji and the em-dash, is a blank flap. `{63}`-`{69}` become red,
+  orange, yellow, green, blue, violet and white flaps.
+- Every tag trims whitespace, so literal spaces are `{{ ' ' }}` and padding uses `slice`
+  against a 22-space string. A `{64}` token is four characters in Liquid but one cell, so pad
+  before inserting it.
+- Keep `{64}` as template text, never inside `{{ }}`. Ruby Liquid ends an output tag at the
+  first closing brace, so `{{ '{64}' }}` is a syntax error on TRMNL. liquidjs and python-liquid
+  both miss this, so check changes with the `liquid` gem (`ruby:3.4-alpine` under podman).
+- Box wrap leaves lines of 22 or fewer cells alone and word-wraps longer ones, which only the
+  error message needs. Rows past the sixth are dropped.
+- Layout ground truth is TRMNL's public Composer code, `/assets/lib/vestaboard_board-*.js` and
+  `composition_font_atlas-*.js`, which mirror the server compositor.
+- `startPreview` rejects the `vestaboard` model, so there is no server preview. Unverified until
+  rendered on a real board: TRMNL's server render, and whether
+  `trmnl.plugin_settings.custom_fields_values.hero` reaches composition layers. Without it the
+  hero falls back to `cards[0]`.
+
 ## Development Guidelines
 
-1. Keep all rendering in `shared.liquid`; size files stay one-liners.
+1. Keep all e-ink rendering in `shared.liquid`; size files stay one-liners. The Vestaboard
+   layout lives in `vestaboard.liquid`.
 2. Tailor each size — drop the grid tail (`limit`) rather than overflow; `.layout` clips.
 3. Guard every `{{ }}`; `cards` can be empty and any `value` can be `null`.
 4. Keep the title_bar icon inline (no network URLs — they can fail on-device).

@@ -1,0 +1,28 @@
+{
+  "id": "63a770d5-9bd3-4b4e-bc1f-3a7a340cb7fc",
+  "name": "HappyFox Help Desk",
+  "width": 22,
+  "height": 6,
+  "background": "#000000",
+  "layers": [
+    {
+      "id": "8138bc75-01df-44fd-81c7-895289b75cbc",
+      "type": "text",
+      "name": "Board",
+      "visible": true,
+      "locked": false,
+      "text": "{%- comment -%}\nHappyFox on a Vestaboard (6x22 flaps): a header row, then one row per metric with Me / All\ncounts in fixed columns. The hero metric leads and gets an orange flap beside its count. This is\nthe text of the single Composer text layer in vestaboard.json; every literal space is emitted as\n{{ ' ' }} because all tags trim whitespace.\n\nColumns: label 0-10, Me count 11-15, gap 16, All count 17-21. Counts are right-aligned.\n{%- endcomment -%}\n\n{%- capture nl %}\n{% endcapture -%}\n{%- assign sp = '                      ' -%}\n\n{%- if error != blank or cards == blank -%}\n{{ 'HAPPYFOX' }}{{ nl }}{{ nl }}{{ error | default: 'No HappyFox data' | truncate: 88 }}\n{%- else -%}\n\n{%- comment -%} Hero: the card matching the `hero` field, else the first card. {%- endcomment -%}\n{%- assign hero = cards[0] -%}\n{%- assign hero_pick = trmnl.plugin_settings.custom_fields_values.hero -%}\n{%- if hero_pick != blank -%}\n{%- assign hero_match = cards | where: 'key', hero_pick -%}\n{%- if hero_match.size > 0 -%}{%- assign hero = hero_match[0] -%}{%- endif -%}\n{%- endif -%}\n{%- assign hero_type = hero.key | remove_first: hero.scope | remove_first: '_' -%}\n\n{%- comment -%} Metric types (key minus scope), hero first, then canonical card order. {%- endcomment -%}\n{%- assign types = hero_type -%}\n{%- for card in cards -%}\n{%- assign t = card.key | remove_first: card.scope | remove_first: '_' -%}\n{%- assign probe = ',' | append: types | append: ',' -%}\n{%- assign needle = ',' | append: t | append: ',' -%}\n{%- unless probe contains needle -%}{%- assign types = types | append: ',' | append: t -%}{%- endunless -%}\n{%- endfor -%}\n{%- assign types = types | split: ',' -%}\n\n{%- assign my_cards = cards | where: 'scope', 'my' -%}\n{%- assign all_cards = cards | where: 'scope', 'all' -%}\n{%- assign scopes = 'my,all' | split: ',' -%}\n\n{%- comment -%} Header row. {%- endcomment -%}\n{{ 'HAPPYFOX' | append: sp | slice: 0, 11 }}\n{%- if my_cards.size > 0 -%}{%- assign head = 'ME' -%}{%- else -%}{%- assign head = '' -%}{%- endif -%}\n{{ sp | append: head | slice: -5, 5 }}{{ ' ' }}\n{%- if all_cards.size > 0 -%}{%- assign head = 'ALL' -%}{%- else -%}{%- assign head = '' -%}{%- endif -%}\n{{ sp | append: head | slice: -5, 5 }}\n\n{%- comment -%} Metric rows: the five remaining board rows. {%- endcomment -%}\n{%- for t in types limit: 5 -%}\n{%- case t -%}\n{%- when 'open' -%}{%- assign label = 'OPEN' -%}\n{%- when 'unassigned' -%}{%- assign label = 'UNASSIGNED' -%}\n{%- when 'due_today' -%}{%- assign label = 'DUE TODAY' -%}\n{%- when 'past_due' -%}{%- assign label = 'PAST DUE' -%}\n{%- when 'created_today' -%}{%- assign label = 'NEW TODAY' -%}\n{%- when 'closed_today' -%}{%- assign label = 'DONE TODAY' -%}\n{%- when 'breached' -%}{%- assign label = 'SLA BREACH' -%}\n{%- when 'unresponded' -%}{%- assign label = 'UNRESPONDED' -%}\n{%- else -%}{%- assign label = t | replace: '_', ' ' -%}\n{%- endcase -%}\n{{ nl }}{{ label | append: sp | slice: 0, 11 }}\n{%- for scope in scopes -%}\n{%- if scope == 'all' -%}{{ ' ' }}{%- endif -%}\n{%- assign key = scope | append: '_' | append: t -%}\n{%- assign match = cards | where: 'key', key | first -%}\n{%- if match == nil -%}{%- assign v = '' -%}\n{%- elsif match.value == nil -%}{%- assign v = '-' -%}\n{%- elsif match.value > 9999 -%}{%- assign v = match.value | divided_by: 1000 | floor | append: 'K' -%}\n{%- else -%}{%- assign v = match.value | append: '' -%}\n{%- endif -%}\n{%- comment -%} {64} is one orange flap, so it pads as a single cell. It stays template text: Ruby Liquid ends {{ }} at the first closing brace. {%- endcomment -%}\n{%- if match.key == hero.key and v.size < 5 -%}\n{%- assign pad = 4 | minus: v.size -%}\n{{ sp | slice: 0, pad }}{64}{{ v }}\n{%- else -%}\n{{ sp | append: v | slice: -5, 5 }}\n{%- endif -%}\n{%- endfor -%}\n{%- endfor -%}\n\n{%- endif -%}\n",
+      "x": 0,
+      "y": 0,
+      "letter_spacing": 0,
+      "align": "left",
+      "color": "#FFFFFF",
+      "font": "vestaboard",
+      "wrap_mode": "box",
+      "box_width": 22,
+      "box_height": null,
+      "opacity": 1,
+      "condition": ""
+    }
+  ]
+}
